@@ -29,9 +29,11 @@ func GetAndFundTestUserWithMnemonic(
 		return nil, fmt.Errorf("failed to get source user wallet: %w", err)
 	}
 
+	decimalPow := math.NewIntWithDecimal(1, int(*chainCfg.CoinDecimals))
+
 	err = chain.SendFunds(ctx, FaucetAccountKeyName, ibc.WalletAmount{
 		Address: user.FormattedAddress(),
-		Amount:  amount,
+		Amount:  amount.Mul(decimalPow),
 		Denom:   chainCfg.Denom,
 	})
 	if err != nil {
@@ -42,6 +44,7 @@ func GetAndFundTestUserWithMnemonic(
 
 // GetAndFundTestUsers generates and funds chain users with the native chain denom.
 // The caller should wait for some blocks to complete before the funds will be accessible.
+// `amount` here is number of coins, not the amount in the smallest unit of the coin. The amount then be multiplied by 10^decimals for each chain.
 func GetAndFundTestUsers(
 	t *testing.T,
 	ctx context.Context,

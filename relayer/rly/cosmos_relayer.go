@@ -42,18 +42,19 @@ func NewCosmosRelayer(log *zap.Logger, testName string, cli *client.Client, netw
 }
 
 type CosmosRelayerChainConfigValue struct {
-	AccountPrefix  string  `json:"account-prefix"`
-	ChainID        string  `json:"chain-id"`
-	Debug          bool    `json:"debug"`
-	GRPCAddr       string  `json:"grpc-addr"`
-	GasAdjustment  float64 `json:"gas-adjustment"`
-	GasPrices      string  `json:"gas-prices"`
-	Key            string  `json:"key"`
-	KeyringBackend string  `json:"keyring-backend"`
-	OutputFormat   string  `json:"output-format"`
-	RPCAddr        string  `json:"rpc-addr"`
-	SignMode       string  `json:"sign-mode"`
-	Timeout        string  `json:"timeout"`
+	AccountPrefix  string   `json:"account-prefix"`
+	ChainID        string   `json:"chain-id"`
+	Debug          bool     `json:"debug"`
+	GRPCAddr       string   `json:"grpc-addr"`
+	GasAdjustment  float64  `json:"gas-adjustment"`
+	GasPrices      string   `json:"gas-prices"`
+	Key            string   `json:"key"`
+	KeyringBackend string   `json:"keyring-backend"`
+	OutputFormat   string   `json:"output-format"`
+	RPCAddr        string   `json:"rpc-addr"`
+	SignMode       string   `json:"sign-mode"`
+	Timeout        string   `json:"timeout"`
+	ExtraCodecs    []string `json:"extra-codecs"`
 }
 
 type CosmosRelayerChainConfig struct {
@@ -95,6 +96,7 @@ func ChainConfigToCosmosRelayerChainConfig(chainConfig ibc.ChainConfig, keyName,
 			Timeout:        "10s",
 			OutputFormat:   "json",
 			SignMode:       "direct",
+			ExtraCodecs:    []string{"ethermint"},
 		},
 	}
 }

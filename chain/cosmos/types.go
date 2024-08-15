@@ -2,6 +2,8 @@ package cosmos
 
 import (
 	"encoding/json"
+
+	sdkmath "cosmossdk.io/math"
 )
 
 const (
@@ -28,6 +30,8 @@ type TxProposal struct {
 	TxHash string
 	// Amount of gas charged to the account.
 	GasSpent int64
+
+	Fee sdkmath.Int
 
 	// Amount deposited for proposal.
 	DepositAmount string

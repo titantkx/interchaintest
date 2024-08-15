@@ -16,6 +16,7 @@ import (
 	"time"
 
 	sdkmath "cosmossdk.io/math"
+	abcitypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
@@ -39,6 +40,7 @@ import (
 	"github.com/strangelove-ventures/interchaintest/v7/ibc"
 	"github.com/strangelove-ventures/interchaintest/v7/internal/blockdb"
 	"github.com/strangelove-ventures/interchaintest/v7/testutil"
+	etherminthd "github.com/titantkx/ethermint/crypto/hd"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -77,7 +79,8 @@ func NewCosmosHeighlinerChainConfig(name string,
 	gasPrices string,
 	gasAdjustment float64,
 	trustingPeriod string,
-	noHostMount bool) ibc.ChainConfig {
+	noHostMount bool,
+) ibc.ChainConfig {
 	return ibc.ChainConfig{
 		Type:           "cosmos",
 		Name:           name,
@@ -106,7 +109,7 @@ func NewCosmosChain(testName string, chainConfig ibc.ChainConfig, numValidators 
 	registry := codectypes.NewInterfaceRegistry()
 	cryptocodec.RegisterInterfaces(registry)
 	cdc := codec.NewProtoCodec(registry)
-	kr := keyring.NewInMemory(cdc)
+	kr := keyring.NewInMemory(cdc, etherminthd.EthSecp256k1Option())
 
 	return &CosmosChain{
 		testName:      testName,
@@ -302,18 +305,28 @@ func (c *CosmosChain) BuildRelayerWallet(ctx context.Context, keyName string) (i
 		return nil, fmt.Errorf("invalid coin type: %w", err)
 	}
 
+	var algo keyring.SignatureAlgo
+	switch c.cfg.CoinType {
+	case "60":
+		algo = etherminthd.EthSecp256k1
+	default:
+		algo = hd.Secp256k1
+	}
+
 	info, mnemonic, err := c.keyring.NewMnemonic(
 		keyName,
 		keyring.English,
 		hd.CreateHDPath(uint32(coinType), 0, 0).String(),
 		"", // Empty passphrase.
-		hd.Secp256k1,
+		algo,
 	)
+	fmt.Printf("Created key %s with mnemonic %s\n", keyName, mnemonic)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create mnemonic: %w", err)
 	}
 
 	addrBytes, err := info.GetAddress()
+	fmt.Printf("Created key %s with address %s\n", keyName, addrBytes.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address: %w", err)
 	}
@@ -324,6 +337,26 @@ func (c *CosmosChain) BuildRelayerWallet(ctx context.Context, keyName string) (i
 // Implements Chain interface
 func (c *CosmosChain) SendFunds(ctx context.Context, keyName string, amount ibc.WalletAmount) error {
 	return c.getFullNode().SendFunds(ctx, keyName, amount)
+}
+
+func (c *CosmosChain) getFee(events []abcitypes.Event) (sdkmath.Int, error) {
+	fee, _ := tendermint.AttributeValue(events, "tx", "fee")
+	refund, hasRefund := tendermint.AttributeValue(events, "refund", "amount")
+
+	feeCoin, err := sdk.ParseCoinNormalized(fee)
+	if err != nil {
+		return sdkmath.Int{}, fmt.Errorf("failed to parse fee coin %s: %w", fee, err)
+	}
+
+	if hasRefund {
+		refundCoin, err := sdk.ParseCoinNormalized(refund)
+		if err != nil {
+			return sdkmath.Int{}, fmt.Errorf("failed to parse refund coin %s: %w", refund, err)
+		}
+		return feeCoin.Amount.Sub(refundCoin.Amount), nil
+	} else {
+		return feeCoin.Amount, nil
+	}
 }
 
 // Implements Chain interface
@@ -347,11 +380,19 @@ func (c *CosmosChain) SendIBCTransfer(
 	}
 	tx.Height = txResp.Height
 	tx.TxHash = txHash
-	// In cosmos, user is charged for entire gas requested, not the actual gas used.
-	tx.GasSpent = txResp.GasWanted
+
+	if c.Config().UseGasUsed {
+		tx.GasSpent = txResp.GasUsed
+	} else {
+		// In cosmos, user is charged for entire gas requested, not the actual gas used.
+		tx.GasSpent = txResp.GasWanted
+	}
+
+	events := txResp.Events
+
+	tx.Fee, _ = c.getFee(events)
 
 	const evType = "send_packet"
-	events := txResp.Events
 
 	var (
 		seq, _           = tendermint.AttributeValue(events, evType, "packet_sequence")
@@ -535,9 +576,14 @@ func (c *CosmosChain) txProposal(txHash string) (tx TxProposal, _ error) {
 	}
 	tx.Height = txResp.Height
 	tx.TxHash = txHash
-	// In cosmos, user is charged for entire gas requested, not the actual gas used.
-	tx.GasSpent = txResp.GasWanted
+	if c.Config().UseGasUsed {
+		tx.GasSpent = txResp.GasUsed
+	} else {
+		// In cosmos, user is charged for entire gas requested, not the actual gas used.
+		tx.GasSpent = txResp.GasWanted
+	}
 	events := txResp.Events
+	tx.Fee, _ = c.getFee(events)
 
 	tx.DepositAmount, _ = tendermint.AttributeValue(events, "proposal_deposit", "amount")
 
@@ -606,7 +652,6 @@ func (c *CosmosChain) AllBalances(ctx context.Context, address string) (types.Co
 
 	queryClient := bankTypes.NewQueryClient(conn)
 	res, err := queryClient.AllBalances(ctx, &params)
-
 	if err != nil {
 		return nil, err
 	}
@@ -1015,7 +1060,7 @@ func (c *CosmosChain) Start(testName string, ctx context.Context, additionalGene
 			zap.String("chain", exportGenesisChain),
 			zap.String("path", exportGenesis),
 		)
-		_ = os.WriteFile(exportGenesis, genbz, 0600)
+		_ = os.WriteFile(exportGenesis, genbz, 0o600)
 	}
 
 	chainNodes := c.Nodes()
@@ -1025,6 +1070,11 @@ func (c *CosmosChain) Start(testName string, ctx context.Context, additionalGene
 			return err
 		}
 	}
+
+	c.log.Debug("Genesis file",
+		zap.String("chain", c.cfg.Name),
+		zap.String("genesis", string(genbz)),
+	)
 
 	if err := chainNodes.LogGenesisHashes(ctx); err != nil {
 		return err

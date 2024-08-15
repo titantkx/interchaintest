@@ -13,9 +13,29 @@ func NewConfig(chainConfigs ...ChainConfig) Config {
 	for _, hermesCfg := range chainConfigs {
 		chainCfg := hermesCfg.cfg
 
-		gasPricesStr, err := strconv.ParseFloat(strings.ReplaceAll(chainCfg.GasPrices, chainCfg.Denom, ""), 32)
+		gasPricesStr, err := strconv.ParseFloat(strings.ReplaceAll(chainCfg.GasPrices, chainCfg.Denom, ""), 64)
 		if err != nil {
 			panic(err)
+		}
+
+		fmt.Printf("keyName: %s\n", hermesCfg.keyName)
+
+		var addressType AddressType
+		switch chainCfg.CoinType {
+		case "60":
+			fmt.Printf("Name: %s, ====> chainCfg.CoinType: %s\n", chainCfg.Name, chainCfg.CoinType)
+			addressType = AddressType{
+				Derivation: "ethermint",
+				ProtoType: &ProtoType{
+					PkType: "/ethermint.crypto.v1.ethsecp256k1.PubKey",
+				},
+			}
+		default:
+			fmt.Printf("Name: %s, chainCfg.CoinType: %s\n", chainCfg.Name, chainCfg.CoinType)
+			addressType = AddressType{
+				Derivation: "cosmos",
+				ProtoType:  nil,
+			}
 		}
 
 		chains = append(chains, Chain{
@@ -31,12 +51,10 @@ func NewConfig(chainConfigs ...ChainConfig) Config {
 			TrustedNode:   false,
 			AccountPrefix: chainCfg.Bech32Prefix,
 			KeyName:       hermesCfg.keyName,
-			AddressType: AddressType{
-				Derivation: "cosmos",
-			},
-			StorePrefix: "ibc",
-			DefaultGas:  100000,
-			MaxGas:      400000,
+			AddressType:   addressType,
+			StorePrefix:   "ibc",
+			DefaultGas:    200000,
+			MaxGas:        400000,
 			GasPrice: GasPrice{
 				Price: gasPricesStr,
 				Denom: chainCfg.Denom,
@@ -151,8 +169,12 @@ type TracingServer struct {
 	Port    int  `toml:"port"`
 }
 
+type ProtoType struct {
+	PkType string `toml:"pk_type"`
+}
 type AddressType struct {
-	Derivation string `toml:"derivation"`
+	Derivation string     `toml:"derivation"`
+	ProtoType  *ProtoType `toml:"proto_type,omitempty"`
 }
 
 type GasPrice struct {

@@ -4,6 +4,8 @@ import (
 	"errors"
 
 	"go.uber.org/multierr"
+
+	sdkmath "cosmossdk.io/math"
 )
 
 // Tx is a generalized IBC transaction.
@@ -14,6 +16,8 @@ type Tx struct {
 	TxHash string
 	// Amount of gas charged to the account.
 	GasSpent int64
+
+	Fee sdkmath.Int
 
 	Packet Packet
 }

@@ -50,8 +50,8 @@ import (
 )
 
 var (
-	userFaucetFund = math.NewInt(10_000_000_000)
-	testCoinAmount = math.NewInt(1_000_000)
+	userFaucetFund = math.NewInt(10_000)
+	testCoinAmount = math.NewInt(1)
 	pollHeightMax  = int64(50)
 )
 
@@ -136,9 +136,11 @@ func sendIBCTransfersFromBothChainsWithTimeout(
 	timeout *ibc.IBCTimeout,
 ) {
 	srcChainCfg := srcChain.Config()
+	srcDecimalPow := math.NewIntWithDecimal(1, int(*srcChainCfg.CoinDecimals))
 	srcUser := testCase.Users[0]
 
 	dstChainCfg := dstChain.Config()
+	dstDecimalPow := math.NewIntWithDecimal(1, int(*dstChainCfg.CoinDecimals))
 	dstUser := testCase.Users[1]
 
 	// will send ibc transfers from user wallet on both chains to their own respective wallet on the other chain
@@ -146,12 +148,12 @@ func sendIBCTransfersFromBothChainsWithTimeout(
 	testCoinSrcToDst := ibc.WalletAmount{
 		Address: srcUser.(*cosmos.CosmosWallet).FormattedAddressWithPrefix(dstChainCfg.Bech32Prefix),
 		Denom:   srcChainCfg.Denom,
-		Amount:  testCoinAmount,
+		Amount:  testCoinAmount.Mul(srcDecimalPow),
 	}
 	testCoinDstToSrc := ibc.WalletAmount{
 		Address: dstUser.(*cosmos.CosmosWallet).FormattedAddressWithPrefix(srcChainCfg.Bech32Prefix),
 		Denom:   dstChainCfg.Denom,
-		Amount:  testCoinAmount,
+		Amount:  testCoinAmount.Mul(dstDecimalPow),
 	}
 
 	var eg errgroup.Group
@@ -397,16 +399,18 @@ func testPacketRelaySuccess(
 	req := require.New(rep.TestifyT(t))
 
 	srcChainCfg := srcChain.Config()
+	srcDecimalPow := math.NewIntWithDecimal(1, int(*srcChainCfg.CoinDecimals))
 	srcUser := testCase.Users[0]
 	srcDenom := srcChainCfg.Denom
 
 	dstChainCfg := dstChain.Config()
+	dstDecimalPow := math.NewIntWithDecimal(1, int(*dstChainCfg.CoinDecimals))
 
 	// [BEGIN] assert on source to destination transfer
 	for i, srcTx := range testCase.TxCache.Src {
 		t.Logf("Asserting %s to %s transfer", srcChainCfg.ChainID, dstChainCfg.ChainID)
 		// Assuming these values since the ibc transfers were sent in PreRelayerStart, so balances may have already changed by now
-		srcInitialBalance := userFaucetFund
+		srcInitialBalance := userFaucetFund.Mul(srcDecimalPow)
 		dstInitialBalance := math.ZeroInt()
 
 		srcAck, err := testutil.PollForAck(ctx, srcChain, srcTx.Height, srcTx.Height+pollHeightMax, srcTx.Packet)
@@ -423,11 +427,12 @@ func testPacketRelaySuccess(
 		dstFinalBalance, err := dstChain.GetBalance(ctx, srcUser.(*cosmos.CosmosWallet).FormattedAddressWithPrefix(dstChainCfg.Bech32Prefix), dstIbcDenom)
 		req.NoError(err, "failed to get balance from dest chain")
 
-		totalFees := srcChain.GetGasFeesInNativeDenom(srcTx.GasSpent)
-		expectedDifference := testCoinAmount.AddRaw(totalFees)
+		// totalFees := srcChain.GetGasFeesInNativeDenom(srcTx.GasSpent)
+		totalFees := srcTx.Fee
+		expectedDifference := testCoinAmount.Mul(srcDecimalPow).Add(totalFees)
 
 		req.True(srcFinalBalance.Equal(srcInitialBalance.Sub(expectedDifference)))
-		req.True(dstFinalBalance.Equal(dstInitialBalance.Add(testCoinAmount)))
+		req.True(dstFinalBalance.Equal(dstInitialBalance.Add(testCoinAmount.Mul(srcDecimalPow))))
 	}
 
 	// [END] assert on source to destination transfer
@@ -439,7 +444,7 @@ func testPacketRelaySuccess(
 		dstDenom := dstChainCfg.Denom
 		// Assuming these values since the ibc transfers were sent in PreRelayerStart, so balances may have already changed by now
 		srcInitialBalance := math.ZeroInt()
-		dstInitialBalance := userFaucetFund
+		dstInitialBalance := userFaucetFund.Mul(dstDecimalPow)
 
 		dstAck, err := testutil.PollForAck(ctx, dstChain, dstTx.Height, dstTx.Height+pollHeightMax, dstTx.Packet)
 		req.NoError(err, "failed to get acknowledgement on destination chain")
@@ -460,9 +465,9 @@ func testPacketRelaySuccess(
 		req.NoError(err, "failed to get balance from dest chain")
 
 		totalFees := dstChain.GetGasFeesInNativeDenom(dstTx.GasSpent)
-		expectedDifference := testCoinAmount.AddRaw(totalFees)
+		expectedDifference := testCoinAmount.Mul(dstDecimalPow).AddRaw(totalFees)
 
-		req.True(srcFinalBalance.Equal(srcInitialBalance.Add(testCoinAmount)))
+		req.True(srcFinalBalance.Equal(srcInitialBalance.Add(testCoinAmount.Mul(dstDecimalPow))))
 		req.True(dstFinalBalance.Equal(dstInitialBalance.Sub(expectedDifference)))
 	}
 	//[END] assert on destination to source transfer
@@ -482,16 +487,18 @@ func testPacketRelayFail(
 
 	srcChainCfg := srcChain.Config()
 	srcUser := testCase.Users[0]
+	srcDecimalPow := math.NewIntWithDecimal(1, int(*srcChainCfg.CoinDecimals))
 	srcDenom := srcChainCfg.Denom
 
 	dstChainCfg := dstChain.Config()
 	dstUser := testCase.Users[1]
+	dstDecimalPow := math.NewIntWithDecimal(1, int(*dstChainCfg.CoinDecimals))
 	dstDenom := dstChainCfg.Denom
 
 	// [BEGIN] assert on source to destination transfer
 	for i, srcTx := range testCase.TxCache.Src {
 		// Assuming these values since the ibc transfers were sent in PreRelayerStart, so balances may have already changed by now
-		srcInitialBalance := userFaucetFund
+		srcInitialBalance := userFaucetFund.Mul(srcDecimalPow)
 		dstInitialBalance := math.ZeroInt()
 
 		timeout, err := testutil.PollForTimeout(ctx, srcChain, srcTx.Height, srcTx.Height+pollHeightMax, srcTx.Packet)
@@ -523,7 +530,7 @@ func testPacketRelayFail(
 	for i, dstTx := range testCase.TxCache.Dst {
 		// Assuming these values since the ibc transfers were sent in PreRelayerStart, so balances may have already changed by now
 		srcInitialBalance := math.ZeroInt()
-		dstInitialBalance := userFaucetFund
+		dstInitialBalance := userFaucetFund.Mul(dstDecimalPow)
 
 		timeout, err := testutil.PollForTimeout(ctx, dstChain, dstTx.Height, dstTx.Height+pollHeightMax, dstTx.Packet)
 		req.NoError(err, "failed to get timeout packet on destination chain")

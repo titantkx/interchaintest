@@ -39,6 +39,8 @@ type ChainConfig struct {
 	NoHostMount bool `yaml:"no-host-mount"`
 	// When true, will skip validator gentx flow
 	SkipGenTx bool
+	// When true, use gas used from the tx response to calculate Fee. Default is use expected gas.
+	UseGasUsed bool
 	// When provided, will run before performing gentx and genesis file creation steps for validators.
 	PreGenesis func(ChainConfig) error
 	// When provided, genesis file contents will be altered before sharing for genesis.
@@ -168,6 +170,10 @@ func (c ChainConfig) MergeChainSpecConfig(other ChainConfig) ChainConfig {
 
 	if other.SkipGenTx {
 		c.SkipGenTx = true
+	}
+
+	if other.UseGasUsed {
+		c.UseGasUsed = true
 	}
 
 	if other.PreGenesis != nil {
