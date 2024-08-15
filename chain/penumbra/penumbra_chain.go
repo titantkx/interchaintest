@@ -122,6 +122,11 @@ func (c *PenumbraChain) getRelayerNode() PenumbraNode {
 }
 
 // Implements Chain interface
+func (c *PenumbraChain) GetDecimalPow() math.Int {
+	return math.NewIntWithDecimal(1, int(*c.Config().CoinDecimals))
+}
+
+// Implements Chain interface
 func (c *PenumbraChain) GetRPCAddress() string {
 	return fmt.Sprintf("http://%s:26657", c.getRelayerNode().TendermintNode.HostName())
 }
@@ -286,8 +291,10 @@ func (c *PenumbraChain) NewChainNode(
 		return PenumbraNode{}, fmt.Errorf("set tendermint volume owner: %w", err)
 	}
 
-	pn := &PenumbraAppNode{log: c.log, Index: i, Chain: c,
-		DockerClient: dockerClient, NetworkID: networkID, TestName: testName, Image: penumbraImage}
+	pn := &PenumbraAppNode{
+		log: c.log, Index: i, Chain: c,
+		DockerClient: dockerClient, NetworkID: networkID, TestName: testName, Image: penumbraImage,
+	}
 
 	pn.containerLifecycle = dockerutil.NewContainerLifecycle(c.log, dockerClient, pn.Name())
 

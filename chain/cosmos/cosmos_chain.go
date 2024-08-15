@@ -274,6 +274,11 @@ func (c *CosmosChain) GetAddress(ctx context.Context, keyName string) ([]byte, e
 	return types.GetFromBech32(b32Addr, c.Config().Bech32Prefix)
 }
 
+// Implements Chain interface
+func (c *CosmosChain) GetDecimalPow() sdkmath.Int {
+	return sdkmath.NewIntWithDecimal(1, int(*c.Config().CoinDecimals))
+}
+
 // BuildWallet will return a Cosmos wallet
 // If mnemonic != "", it will restore using that mnemonic
 // If mnemonic == "", it will create a new key

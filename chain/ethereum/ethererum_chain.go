@@ -180,7 +180,8 @@ func (c *EthereumChain) Start(testName string, ctx context.Context, additionalGe
 	// IBC support, add when necessary
 	//   * add additionalGenesisWallet support for relayer wallet, either add genesis accounts or tx after chain starts
 
-	cmd := []string{c.cfg.Bin,
+	cmd := []string{
+		c.cfg.Bin,
 		"--host", "0.0.0.0", // Anyone can call
 		"--block-time", "2", // 2 second block times
 		"--accounts", "10", // We current only use the first account for the faucet, but tests may expect the default
@@ -248,6 +249,11 @@ func (c *EthereumChain) logger() *zap.Logger {
 	)
 }
 
+// Implements Chain interface
+func (c *EthereumChain) GetDecimalPow() sdkmath.Int {
+	return sdkmath.NewIntWithDecimal(1, int(*c.Config().CoinDecimals))
+}
+
 func (c *EthereumChain) GetRPCAddress() string {
 	return fmt.Sprintf("http://%s:8545", c.HostName())
 }
@@ -300,7 +306,6 @@ func (c *EthereumChain) CreateKey(ctx context.Context, keyName string) error {
 
 // Get address of account, cast to a string to use
 func (c *EthereumChain) GetAddress(ctx context.Context, keyName string) ([]byte, error) {
-
 	cmd := []string{"cast", "wallet", "address", "--keystore", c.keystoreMap[keyName], "--password", ""}
 	stdout, _, err := c.Exec(ctx, cmd, nil)
 	if err != nil {
@@ -316,7 +321,6 @@ func (c *EthereumChain) SendFunds(ctx context.Context, keyName string, amount ib
 			"--private-key", "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 			"--rpc-url", c.GetRPCAddress(),
 		)
-
 	} else {
 		cmd = append(cmd,
 			"--keystore", c.keystoreMap[keyName],

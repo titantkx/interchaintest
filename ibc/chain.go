@@ -54,6 +54,8 @@ type Chain interface {
 	// GetAddress fetches the bech32 address for a test key on the "user" node (either the first fullnode or the first validator if no fullnodes).
 	GetAddress(ctx context.Context, keyName string) ([]byte, error)
 
+	GetDecimalPow() math.Int
+
 	// SendFunds sends funds to a wallet from a user account.
 	SendFunds(ctx context.Context, keyName string, amount WalletAmount) error
 
