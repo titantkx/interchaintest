@@ -175,7 +175,8 @@ func GetTransferChannel(ctx context.Context, r Relayer, rep RelayerExecReporter,
 			if srcChan != nil {
 				return nil, fmt.Errorf("found multiple transfer channels on %s for connection %s", srcChainID, srcConnectionID)
 			}
-			srcChan = &channel
+			ch := channel
+			srcChan = &ch
 		}
 	}
 
