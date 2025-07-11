@@ -427,7 +427,6 @@ func testPacketRelaySuccess(
 		dstFinalBalance, err := dstChain.GetBalance(ctx, srcUser.(*cosmos.CosmosWallet).FormattedAddressWithPrefix(dstChainCfg.Bech32Prefix), dstIbcDenom)
 		req.NoError(err, "failed to get balance from dest chain")
 
-		// totalFees := srcChain.GetGasFeesInNativeDenom(srcTx.GasSpent)
 		totalFees := srcTx.Fee
 		expectedDifference := testCoinAmount.Mul(srcDecimalPow).Add(totalFees)
 
@@ -464,7 +463,7 @@ func testPacketRelaySuccess(
 		dstFinalBalance, err := dstChain.GetBalance(ctx, dstUser.(*cosmos.CosmosWallet).FormattedAddressWithPrefix(dstChainCfg.Bech32Prefix), dstDenom)
 		req.NoError(err, "failed to get balance from dest chain")
 
-		totalFees := dstChain.GetGasFeesInNativeDenom(dstTx.GasSpent)
+		totalFees := dstTx.Fee.Int64()
 		expectedDifference := testCoinAmount.Mul(dstDecimalPow).AddRaw(totalFees)
 
 		req.True(srcFinalBalance.Equal(srcInitialBalance.Add(testCoinAmount.Mul(dstDecimalPow))))
@@ -519,7 +518,7 @@ func testPacketRelayFail(
 		dstFinalBalance, err := dstChain.GetBalance(ctx, srcUser.(*cosmos.CosmosWallet).FormattedAddressWithPrefix(dstChainCfg.Bech32Prefix), dstIbcDenom)
 		req.NoError(err, "failed to get balance from destination chain")
 
-		totalFees := srcChain.GetGasFeesInNativeDenom(srcTx.GasSpent)
+		totalFees := srcTx.Fee.Int64()
 
 		req.True(srcFinalBalance.Equal(srcInitialBalance.SubRaw(totalFees)))
 		req.True(dstFinalBalance.Equal(dstInitialBalance))
@@ -550,7 +549,7 @@ func testPacketRelayFail(
 		dstFinalBalance, err := dstChain.GetBalance(ctx, dstUser.(*cosmos.CosmosWallet).FormattedAddressWithPrefix(dstChainCfg.Bech32Prefix), dstDenom)
 		req.NoError(err, "failed to get balance from destination chain")
 
-		totalFees := dstChain.GetGasFeesInNativeDenom(dstTx.GasSpent)
+		totalFees := dstTx.Fee.Int64()
 
 		req.True(srcFinalBalance.Equal(srcInitialBalance))
 		req.True(dstFinalBalance.Equal(dstInitialBalance.SubRaw(totalFees)))
